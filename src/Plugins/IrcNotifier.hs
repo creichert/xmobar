@@ -1,7 +1,7 @@
 {-# OPTIONS -Wall -cpp #-}
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Plugins.IrssiNotify
+-- Module      :  Plugins.IrcNotifier
 -- Copyright   :  (c) Christopher Reichert
 -- License     :  BSD-style (see LICENSE)
 --
@@ -17,9 +17,9 @@
 --  your .irssi directory.
 --
 --  Then add this command to your Config {} in .xmobarrc.
---      Run IrssiNotify "/path/to/fifo_pipe"
+--      Run IrcNotifier "/path/to/fifo_pipe"
 --
---  Now you have access to the alias `IrssiNotify' to write these to your
+--  Now you have access to the alias `IrcNotifier' to write these to your
 --  template.
 --
 --  TODO:
@@ -27,20 +27,20 @@
 --      - User specified truncation in .xmobarrc template?
 -----------------------------------------------------------------------------
 
-module Plugins.IrssiNotify where
+module Plugins.IrcNotifier where
 
 import Plugins
 import System.IO
 
 
-data IrssiNotify = IrssiNotify FilePath
+data IrcNotifier = IrcNotifier FilePath
     deriving (Read, Show)
 
 
 -- cb :: String -> IO ()
-instance Exec IrssiNotify where
-    alias (IrssiNotify _) = "IrssiNotify"
-    start (IrssiNotify fp) cb = do
+instance Exec IrcNotifier where
+    alias (IrcNotifier _) = "IrcNotifier"
+    start (IrcNotifier fp) cb = do
         h <- openFile fp ReadWriteMode
         _ <- forever (getPing h >>= cb)
         putStrLn ""
@@ -84,4 +84,4 @@ nickColor n = "<fc=red>" ++ n ++ "</fc>"
 
 
 msgColor :: String -> String
-msgColor n = "<fc=green>" ++ n ++ "</fc>"
+msgColor n = "<fc=purple>" ++ n ++ "</fc>"
