@@ -22,40 +22,92 @@
 --  Now you have access to the alias `IrcNotifier' to write these to your
 --  template.
 --
---  TODO:
---      - Hide ping when irssi is focused.
---      - User specified truncation in .xmobarrc template?
+--  ISSUES:
+--      - I can't seem to find a way to tell if the user has focused
+--        the "irssi" client specifically. It's not an X Window application
+--        and doesn't inheret it's parent windows pid when run inside
+--        screen.
 -----------------------------------------------------------------------------
 
 module Plugins.IrcNotifier where
 
 import Plugins
 import System.IO
+import System.Process
+import Control.Concurrent
 
+import Graphics.X11.Xlib.Display
+import Graphics.X11.Xlib.Extras
+import Graphics.X11.Types
 
-data IrcNotifier = IrcNotifier FilePath
+type IrcClient = String
+
+data IrcNotifier = IrcNotifier FilePath IrcClient
     deriving (Read, Show)
 
 
 -- cb :: String -> IO ()
 instance Exec IrcNotifier where
-    alias (IrcNotifier _) = "IrcNotifier"
-    start (IrcNotifier fp) cb = do
+    alias (IrcNotifier _ _) = "IrcNotifier"
+    start (IrcNotifier fp clt) cb = do
         h <- openFile fp ReadWriteMode
+
+        {- Fork off the event listener for 
+           window changing events -}
+        _ <- forkIO (forever (ircFocused clt cb))
+
+        {- List for pings forever. -}
         _ <- forever (getPing h >>= cb)
-        putStrLn ""
+        return ()
       where forever x = x >> forever x
 
--- this code will be used as our discovery mechanism for
--- when pings have been seen.
-#if 0
-        forever (getPing h >>= cb) (irssiFocused fp >>= cb)
-      where forever x y = x >> y >> forever x y
 
 -- if irssi has been focused then we can dissapear the pings
-irssiFocused :: FilePath -> IO String
-irssiFocused _ = return ""
-#endif
+ircFocused :: IrcClient -> (String -> IO ()) -> IO ()
+ircFocused clt cb = do
+    threadDelay 1000000
+    dpy <- openDisplay ""
+    (w, _) <- getInputFocus dpy
+    pid <- currentWindowPid w
+    ircpid <- getIrcPid clt
+    if pid == ircpid
+        then return "" >>= cb
+        else return ()
+
+
+getIrcPid :: IrcClient -> IO String
+getIrcPid clt =
+    if clt == "irssi"
+        then getppid clt
+        else (getpid clt)
+
+
+getpid :: String -> IO String
+getpid clt = do
+    pidstr <- readProcess "/bin/sh" ["-c", "ps x | grep " ++ clt ++ " | grep -v grep"] []
+    let x = head $ words pidstr
+    return x
+
+
+getppid :: IrcClient -> IO String
+getppid clt = undefined
+
+
+{-
+  Ideally, we would retrieve the pid by looking
+  at WM properties. However, the library doesn't
+  seem to work with non-standardized properties.
+
+    atom <- internAtom dpy "_NET_WM_PID" False
+    xprop <- getTextProperty dpy w atom
+
+    wpl <- wcTextPropertyToTextList dpy xprop
+-}
+currentWindowPid :: XID -> IO String
+currentWindowPid xid = do
+    pidS <- readProcess "/bin/sh" ["-c", "xprop -id " ++ (show xid) ++ " _NET_WM_PID"] []
+    let pid = last $ words pidS
+    return pid
 
 
 getPing :: Handle -> IO String
@@ -85,3 +137,4 @@ nickColor n = "<fc=red>" ++ n ++ "</fc>"
 
 msgColor :: String -> String
 msgColor n = "<fc=purple>" ++ n ++ "</fc>"
+
